@@ -22,28 +22,32 @@ logging.basicConfig(level=logging.DEBUG)
 
 def get_transcript(video_id):
     try:
-        logging.info(f"Attempting to get transcript for video ID: {video_id}")
+        # Fallback to pytube
+        from pytube import YouTube
         
-        available_transcripts = YouTubeTranscriptApi.list_transcripts(video_id)
-        logging.info(f"Available transcripts: {[t.language_code for t in available_transcripts]}")
+        # Get the YouTube video
+        yt = YouTube(f"https://www.youtube.com/watch?v={video_id}")
         
-        # Attempt to get English transcript
-        try:
-            transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['en', 'a.en'])
-            logging.info("Successfully retrieved transcript")
-        except Exception as e:
-            logging.warning(f"Failed to retrieve English transcript: {str(e)}")
-            # Fallback logic here...
-        
-        formatted_transcript = "\n".join(entry['text'] for entry in transcript)
-        return formatted_transcript
-    except NoTranscriptFound:
-        logging.error(f"No transcript found for video ID: {video_id}. Subtitles may be disabled.")
-        return "Could not retrieve a transcript for the video! This is most likely caused by subtitles being disabled for this video."
+        # Check if captions are available
+        if yt.captions and len(yt.captions) > 0:
+            # Get English captions if available, otherwise use the first available
+            caption_track = yt.captions.get('en', yt.captions.get('a.en', next(iter(yt.captions.values()))))
+            
+            # Get the caption track XML
+            caption_xml = caption_track.xml_captions
+            
+            # Basic parsing of XML to get text (could be improved)
+            text_content = re.sub(r'<.*?>', '', caption_xml)
+            
+            logging.info("Successfully retrieved transcript using pytube")
+            return text_content
+        else:
+            logging.error("No captions available via pytube")
+            return "No transcript available for this video using pytube."
     except Exception as e:
-        logging.error(f"An error occurred while retrieving the transcript: {str(e)}")
+        logging.error(f"An error occurred while retrieving the transcript with pytube: {str(e)}")
         return f"An error occurred: {str(e)}"
-    
+
 # And implement this fallback function
 def get_transcript_with_fallback(video_id):
     try:
