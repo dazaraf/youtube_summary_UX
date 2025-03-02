@@ -4,6 +4,7 @@ import os
 import requests
 import logging
 import time  # Import time module for sleep
+import re
 # Add pytube import at the top to ensure it's available
 try:
     from pytube import YouTube
@@ -77,7 +78,6 @@ def get_transcript_with_fallback(video_id):
                 caption_xml = caption_track.xml_captions
                 
                 # Basic parsing of XML to get text (could be improved)
-                import re
                 text_content = re.sub(r'<.*?>', '', caption_xml)
                 
                 logging.info("Successfully retrieved transcript using fallback method")
@@ -150,40 +150,29 @@ def generate_summary(input_content=None):
     
     return "Error: Received empty response from API after multiple attempts."
 
+def extract_video_id(video_url):
+    # Use regex to extract the video ID from the URL
+    match = re.search(r'(?:v=|\/)([0-9A-Za-z_-]{11})', video_url)
+    if match:
+        return match.group(1)
+    return None
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
-        try:
-            video_url = request.form['video_url']
-            # Extract video ID more robustly
-            if 'v=' in video_url:
-                video_id = video_url.split("v=")[-1].split("&")[0]  # Handle additional URL parameters
-            elif 'youtu.be/' in video_url:
-                video_id = video_url.split("youtu.be/")[-1].split("?")[0]
-            else:
-                return jsonify({"error": "Invalid YouTube URL format"})
-            
-            logging.info(f"Processing video ID: {video_id}")
-            
-            # Call the enhanced get_transcript function
-            transcript = get_transcript_with_fallback(video_id)
-            
-            if "An error occurred" in transcript or "Could not retrieve" in transcript:
-                logging.error(f"Transcript error: {transcript}")
-                return jsonify({"error": transcript})
-            
-            # Log transcript length for debugging
-            logging.info(f"Retrieved transcript of length: {len(transcript)} characters")
-            
-            # Call the generate_summary function with the transcript
-            summary = generate_summary(transcript)
-            logging.info(f"Generated summary of length: {len(summary)} characters")
-            
-            return summary
-        except Exception as e:
-            logging.error(f"Unexpected error in route: {str(e)}")
-            import traceback
-            logging.error(f"Traceback: {traceback.format_exc()}")
-            return jsonify({"error": f"Server error: {str(e)}"})
-    
+        video_url = request.form['video_url'].strip()  # Strip whitespace
+        video_id = extract_video_id(video_url)  # Extract video ID
+        
+        if not video_id:
+            return jsonify({"error": "Invalid YouTube URL format"})
+        
+        # Call the get_transcript function to get the transcript text
+        transcript = get_transcript(video_id)
+        if "An error occurred" in transcript:
+            return jsonify({"error": transcript})
+        
+        # Call the generate_summary function with the transcript
+        summary = generate_summary(transcript)  # Pass the transcript to the function
+        return summary  # Return the summary as plain text
+        
     return render_template('index.html', summary=None)
