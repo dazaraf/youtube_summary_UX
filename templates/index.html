@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Summary</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>YouTube Summary Generator</h1>
+        <form id="summaryForm" method="POST">
+            <input type="text" name="video_url" placeholder="Enter YouTube video URL" required>
+            <button type="submit" name="get_summary">Get Summary</button>
+        </form>
+        <div class="summary-box" id="summaryBox">
+            <p id="summaryText"></p>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('summaryForm');
+        const summaryBox = document.getElementById('summaryBox');
+        const summaryText = document.getElementById('summaryText');
+
+        form.addEventListener('submit', function(event) {
+            event.preventDefault();
+            summaryText.innerHTML = "Your summary is cooking, please hold...";
+            summaryBox.style.display = 'block';
+
+            const formData = new FormData(form);
+
+            fetch(form.action, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.text();
+            })
+            .then(data => {
+                summaryText.innerHTML = data;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                summaryText.innerHTML = "An error occurred while fetching the summary.";
+            });
+        });
+    </script>
+</body>
+</html>
