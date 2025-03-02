@@ -4,6 +4,12 @@ import os
 import requests
 import logging
 import time  # Import time module for sleep
+# Add pytube import at the top to ensure it's available
+try:
+    from pytube import YouTube
+    logging.info("Successfully imported pytube")
+except ImportError as e:
+    logging.error(f"Failed to import pytube: {str(e)}")
 
 app = Flask(__name__)
 
