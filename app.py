@@ -5,12 +5,7 @@ import requests
 import logging
 import time  # Import time module for sleep
 import re
-# Add pytube import at the top to ensure it's available
-try:
-    from pytube import YouTube
-    logging.info("Successfully imported pytube")
-except ImportError as e:
-    logging.error(f"Failed to import pytube: {str(e)}")
+from yt_dlp import YoutubeDL
 
 app = Flask(__name__)
 
@@ -22,65 +17,53 @@ logging.basicConfig(level=logging.DEBUG)
 
 def get_transcript(video_id):
     try:
-        # Fallback to pytube
-        from pytube import YouTube
-        
-        # Get the YouTube video
-        yt = YouTube(f"https://www.youtube.com/watch?v={video_id}")
-        
-        # Check if captions are available
-        if yt.captions and len(yt.captions) > 0:
-            # Get English captions if available, otherwise use the first available
-            caption_track = yt.captions.get('en', yt.captions.get('a.en', next(iter(yt.captions.values()))))
-            
-            # Get the caption track XML
-            caption_xml = caption_track.xml_captions
-            
-            # Basic parsing of XML to get text (could be improved)
-            text_content = re.sub(r'<.*?>', '', caption_xml)
-            
-            logging.info("Successfully retrieved transcript using pytube")
-            return text_content
+        # YouTube URL
+        url = f"https://www.youtube.com/watch?v={video_id}"
+
+        # yt-dlp options
+        ydl_opts = {
+            'quiet': True,
+            'writesubtitles': True,
+            'subtitleslangs': ['en'],  # English subtitles
+            'skip_download': True,
+        }
+
+        # Extract captions using yt-dlp
+        with YoutubeDL(ydl_opts) as ydl:
+            info_dict = ydl.extract_info(url, download=False)
+            subtitles = info_dict.get('subtitles', {}).get('en', [])
+            automatic_captions = info_dict.get('automatic_captions', {}).get('en', [])
+
+        # Get the best available English captions
+        subtitle_url = None
+        if subtitles:
+            subtitle_url = subtitles[-1]['url']
+        elif automatic_captions:
+            subtitle_url = automatic_captions[-1]['url']
+
+        # Fetch and clean the captions
+        if subtitle_url:
+            response = requests.get(subtitle_url)
+            raw_captions = response.text
+            cleaned_captions = clean_vtt_captions(raw_captions)
+            logging.info("Successfully retrieved transcript using yt-dlp")
+            return cleaned_captions
         else:
-            logging.error("No captions available via pytube")
-            return "No transcript available for this video using pytube."
+            logging.error("No English captions found via yt-dlp")
+            return "No transcript available for this video using yt-dlp."
     except Exception as e:
-        logging.error(f"An error occurred while retrieving the transcript with pytube: {str(e)}")
+        logging.error(f"An error occurred while retrieving the transcript with yt-dlp: {str(e)}")
         return f"An error occurred: {str(e)}"
 
-# And implement this fallback function
+# Update the fallback function to remove pytube references
 def get_transcript_with_fallback(video_id):
     try:
         # First try with youtube_transcript_api
         return get_transcript(video_id)
     except Exception as e:
         logging.warning(f"Primary transcript method failed: {str(e)}, trying fallback...")
-        try:
-            # Fallback to pytube
-            from pytube import YouTube
-            
-            # Get the YouTube video
-            yt = YouTube(f"https://www.youtube.com/watch?v={video_id}")
-            
-            # Check if captions are available
-            if yt.captions and len(yt.captions) > 0:
-                # Get English captions if available, otherwise use the first available
-                caption_track = yt.captions.get('en', yt.captions.get('a.en', next(iter(yt.captions.values()))))
-                
-                # Get the caption track XML
-                caption_xml = caption_track.xml_captions
-                
-                # Basic parsing of XML to get text (could be improved)
-                text_content = re.sub(r'<.*?>', '', caption_xml)
-                
-                logging.info("Successfully retrieved transcript using fallback method")
-                return text_content
-            else:
-                logging.error("No captions available via fallback method")
-                return "No transcript available for this video using either method."
-        except Exception as fallback_error:
-            logging.error(f"Fallback transcript method also failed: {str(fallback_error)}")
-            return f"Failed to retrieve transcript via both methods. Error: {str(e)} | Fallback error: {str(fallback_error)}"
+        # Fallback to yt-dlp (already implemented in get_transcript)
+        return get_transcript(video_id)  # Reuse the same function
 
 def format_summary(summary_text):
     # Replace Markdown bold syntax with HTML tags
