@@ -17,7 +17,15 @@ logging.basicConfig(level=logging.DEBUG)
 
 def get_transcript(video_id):
     try:
-        transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['en'])
+        # Retrieve the proxy URL from environment variables
+        proxy_url = os.getenv('PROXY_URL')
+        proxies = {
+            "http": proxy_url,
+            "https": proxy_url,
+        } if proxy_url else None  # Use None if no proxy is set
+
+        # Fetch the transcript using the proxy if available
+        transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['en'], proxies=proxies)
         text = " ".join([entry['text'] for entry in transcript])
         logging.info("Successfully retrieved transcript using YouTubeTranscriptApi")
         return text
@@ -113,7 +121,7 @@ def index():
             return jsonify({"error": "Invalid YouTube URL format"})
         
         # Call the get_transcript function to get the transcript text
-        transcript = get_transcript(video_id)
+        transcript = get_transcript('8j9lSufYKRM')
         if "Error fetching transcript" in transcript:
             return jsonify({"error": transcript})
         
@@ -122,3 +130,6 @@ def index():
         return summary  # Return the summary as plain text
         
     return render_template('index.html', summary=None)
+
+if __name__ == "__main__":  # Main entry point
+    app.run(debug=True)  # Run the app in debug mode
