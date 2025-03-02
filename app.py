@@ -26,6 +26,9 @@ def get_transcript(video_id):
             'writesubtitles': True,
             'subtitleslangs': ['en'],  # English subtitles
             'skip_download': True,
+            'headers': {
+                'Cookie': os.getenv("YT_COOKIE")  # Use Render's stored cookie
+    }
         }
 
         # Extract captions using yt-dlp
