@@ -2,3 +2,4 @@ flask
 youtube_transcript_api
 requests
 gunicorn
+pytube>=11.0.1

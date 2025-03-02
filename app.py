@@ -47,6 +47,41 @@ def get_transcript(video_id):
         import traceback
         logging.error(f"Traceback: {traceback.format_exc()}")
         return f"An error occurred: {str(e)}"
+    
+# And implement this fallback function
+def get_transcript_with_fallback(video_id):
+    try:
+        # First try with youtube_transcript_api
+        return get_transcript(video_id)
+    except Exception as e:
+        logging.warning(f"Primary transcript method failed: {str(e)}, trying fallback...")
+        try:
+            # Fallback to pytube
+            from pytube import YouTube
+            
+            # Get the YouTube video
+            yt = YouTube(f"https://www.youtube.com/watch?v={video_id}")
+            
+            # Check if captions are available
+            if yt.captions and len(yt.captions) > 0:
+                # Get English captions if available, otherwise use the first available
+                caption_track = yt.captions.get('en', yt.captions.get('a.en', next(iter(yt.captions.values()))))
+                
+                # Get the caption track XML
+                caption_xml = caption_track.xml_captions
+                
+                # Basic parsing of XML to get text (could be improved)
+                import re
+                text_content = re.sub(r'<.*?>', '', caption_xml)
+                
+                logging.info("Successfully retrieved transcript using fallback method")
+                return text_content
+            else:
+                logging.error("No captions available via fallback method")
+                return "No transcript available for this video using either method."
+        except Exception as fallback_error:
+            logging.error(f"Fallback transcript method also failed: {str(fallback_error)}")
+            return f"Failed to retrieve transcript via both methods. Error: {str(e)} | Fallback error: {str(fallback_error)}"
 
 def format_summary(summary_text):
     # Replace Markdown bold syntax with HTML tags
@@ -112,20 +147,37 @@ def generate_summary(input_content=None):
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
-        video_url = request.form['video_url']
-        video_id = video_url.split("v=")[-1]  # Extract video ID from URL
-        
-        # Call the get_transcript function to get the transcript text
-        transcript = get_transcript(video_id)
-        if "An error occurred" in transcript:
-            return jsonify({"error": transcript})  # Handle any errors from get_transcript
-        
-        # Call the generate_summary function with the transcript
-        summary = generate_summary(transcript)  # Pass the transcript to the function
-        return summary  # Return the summary as plain text
-        
+        try:
+            video_url = request.form['video_url']
+            # Extract video ID more robustly
+            if 'v=' in video_url:
+                video_id = video_url.split("v=")[-1].split("&")[0]  # Handle additional URL parameters
+            elif 'youtu.be/' in video_url:
+                video_id = video_url.split("youtu.be/")[-1].split("?")[0]
+            else:
+                return jsonify({"error": "Invalid YouTube URL format"})
+            
+            logging.info(f"Processing video ID: {video_id}")
+            
+            # Call the enhanced get_transcript function
+            transcript = get_transcript_with_fallback(video_id)
+            
+            if "An error occurred" in transcript or "Could not retrieve" in transcript:
+                logging.error(f"Transcript error: {transcript}")
+                return jsonify({"error": transcript})
+            
+            # Log transcript length for debugging
+            logging.info(f"Retrieved transcript of length: {len(transcript)} characters")
+            
+            # Call the generate_summary function with the transcript
+            summary = generate_summary(transcript)
+            logging.info(f"Generated summary of length: {len(summary)} characters")
+            
+            return summary
+        except Exception as e:
+            logging.error(f"Unexpected error in route: {str(e)}")
+            import traceback
+            logging.error(f"Traceback: {traceback.format_exc()}")
+            return jsonify({"error": f"Server error: {str(e)}"})
+    
     return render_template('index.html', summary=None)
-
-
-if __name__ == '__main__':
-    app.run(debug=True)
