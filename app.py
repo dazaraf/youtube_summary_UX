@@ -17,46 +17,13 @@ logging.basicConfig(level=logging.DEBUG)
 
 def get_transcript(video_id):
     try:
-        # YouTube URL
-        url = f"https://www.youtube.com/watch?v={video_id}"
-
-        # yt-dlp options
-        ydl_opts = {
-            'quiet': True,
-            'writesubtitles': True,
-            'subtitleslangs': ['en'],  # English subtitles
-            'skip_download': True,
-            'headers': {
-                'Cookie': os.getenv("YT_COOKIE")  # Use Render's stored cookie
-    }
-        }
-
-        # Extract captions using yt-dlp
-        with YoutubeDL(ydl_opts) as ydl:
-            info_dict = ydl.extract_info(url, download=False)
-            subtitles = info_dict.get('subtitles', {}).get('en', [])
-            automatic_captions = info_dict.get('automatic_captions', {}).get('en', [])
-
-        # Get the best available English captions
-        subtitle_url = None
-        if subtitles:
-            subtitle_url = subtitles[-1]['url']
-        elif automatic_captions:
-            subtitle_url = automatic_captions[-1]['url']
-
-        # Fetch and clean the captions
-        if subtitle_url:
-            response = requests.get(subtitle_url)
-            raw_captions = response.text
-            cleaned_captions = clean_vtt_captions(raw_captions)
-            logging.info("Successfully retrieved transcript using yt-dlp")
-            return cleaned_captions
-        else:
-            logging.error("No English captions found via yt-dlp")
-            return "No transcript available for this video using yt-dlp."
+        transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['en'])
+        text = " ".join([entry['text'] for entry in transcript])
+        logging.info("Successfully retrieved transcript using YouTubeTranscriptApi")
+        return text
     except Exception as e:
-        logging.error(f"An error occurred while retrieving the transcript with yt-dlp: {str(e)}")
-        return f"An error occurred: {str(e)}"
+        logging.error(f"Error fetching transcript: {e}")
+        return f"Error fetching transcript: {e}"
 
 # Update the fallback function to remove pytube references
 def get_transcript_with_fallback(video_id):
@@ -147,7 +114,7 @@ def index():
         
         # Call the get_transcript function to get the transcript text
         transcript = get_transcript(video_id)
-        if "An error occurred" in transcript:
+        if "Error fetching transcript" in transcript:
             return jsonify({"error": transcript})
         
         # Call the generate_summary function with the transcript
