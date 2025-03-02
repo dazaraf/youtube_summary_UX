@@ -2,4 +2,4 @@ flask
 youtube_transcript_api
 requests
 gunicorn
-yt-dlp==0.6.1
+yt-dlp
