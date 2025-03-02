@@ -22,26 +22,18 @@ logging.basicConfig(level=logging.DEBUG)
 
 def get_transcript(video_id):
     try:
-        # Log the attempt
         logging.info(f"Attempting to get transcript for video ID: {video_id}")
         
-        # Try to get available transcript languages first
         available_transcripts = YouTubeTranscriptApi.list_transcripts(video_id)
         logging.info(f"Available transcripts: {[t.language_code for t in available_transcripts]}")
         
-        # First try to get English transcript if available
+        # Attempt to get English transcript
         try:
-            transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['en'])
-            logging.info("Successfully retrieved English transcript")
-        except:
-            # If English fails, get the first available transcript
-            logging.info("English transcript not available, getting first available")
-            transcript_list = list(available_transcripts)
-            if transcript_list:
-                first_transcript = transcript_list[0].fetch()
-                transcript = first_transcript
-            else:
-                raise NoTranscriptFound("No transcripts available")
+            transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['en', 'a.en'])
+            logging.info("Successfully retrieved transcript")
+        except Exception as e:
+            logging.warning(f"Failed to retrieve English transcript: {str(e)}")
+            # Fallback logic here...
         
         formatted_transcript = "\n".join(entry['text'] for entry in transcript)
         return formatted_transcript
@@ -50,9 +42,6 @@ def get_transcript(video_id):
         return "Could not retrieve a transcript for the video! This is most likely caused by subtitles being disabled for this video."
     except Exception as e:
         logging.error(f"An error occurred while retrieving the transcript: {str(e)}")
-        # More detailed error logging
-        import traceback
-        logging.error(f"Traceback: {traceback.format_exc()}")
         return f"An error occurred: {str(e)}"
     
 # And implement this fallback function
