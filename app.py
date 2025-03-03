@@ -25,23 +25,27 @@ class SSLAdapter(HTTPAdapter):
         kwargs["ssl_context"] = ssl._create_unverified_context()
         super().init_poolmanager(*args, **kwargs)
 
-# Patch requests globally before calling YouTubeTranscriptApi
-session = requests.Session()
-session.mount("https://", SSLAdapter())
-
 def get_transcript(video_id):
     try:
-        # Retrieve the proxy URL from environment variables
         proxy_url = os.getenv('PROXY_URL')
-        proxies = {
-            "http": proxy_url,
-            "https": proxy_url,
-        } if proxy_url else None  # Use None if no proxy is set
-
-        # Force YouTubeTranscriptApi to use the patched session
-        transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['en'], proxies=proxies)
-        text = " ".join([entry['text'] for entry in transcript])
-        return text
+        # Set up a custom session
+        session = requests.Session()
+        session.mount("https://", SSLAdapter())
+        if proxy_url:
+            session.proxies = {
+                "http": proxy_url,
+                "https": proxy_url,
+            }
+        # Patch requests.get to use the custom session
+        original_get = requests.get
+        requests.get = session.get
+        try:
+            transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['en'])
+            text = " ".join([entry['text'] for entry in transcript])
+            return text
+        finally:
+            # Restore original requests.get
+            requests.get = original_get
     except Exception as e:
         return f"Error fetching transcript: {e}"
 
