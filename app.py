@@ -2,6 +2,10 @@ from flask import Flask, request, render_template, jsonify
 from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound
 import os
 import requests
+import ssl
+from youtube_transcript_api import YouTubeTranscriptApi
+from requests.adapters import HTTPAdapter
+from urllib3.poolmanager import PoolManager
 import logging
 import time  # Import time module for sleep
 import re
@@ -15,6 +19,16 @@ DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY')
 # Set up logging configuration
 logging.basicConfig(level=logging.DEBUG)
 
+# Custom Adapter to Disable SSL Verification
+class SSLAdapter(HTTPAdapter):
+    def init_poolmanager(self, *args, **kwargs):
+        kwargs["ssl_context"] = ssl._create_unverified_context()
+        super().init_poolmanager(*args, **kwargs)
+
+# Patch requests globally before calling YouTubeTranscriptApi
+session = requests.Session()
+session.mount("https://", SSLAdapter())
+
 def get_transcript(video_id):
     try:
         # Retrieve the proxy URL from environment variables
@@ -24,14 +38,13 @@ def get_transcript(video_id):
             "https": proxy_url,
         } if proxy_url else None  # Use None if no proxy is set
 
-        # Fetch the transcript using the proxy if available
+        # Force YouTubeTranscriptApi to use the patched session
         transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['en'], proxies=proxies)
         text = " ".join([entry['text'] for entry in transcript])
-        logging.info("Successfully retrieved transcript using YouTubeTranscriptApi")
         return text
     except Exception as e:
-        logging.error(f"Error fetching transcript: {e}")
         return f"Error fetching transcript: {e}"
+
 
 # Update the fallback function to remove pytube references
 def get_transcript_with_fallback(video_id):
